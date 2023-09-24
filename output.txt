@@ -1,0 +1,16 @@
+Owner Address: 0x7fa9385be102ac3eac297483dd6233d62b3e1496
+TickLower: -60
+TickUpper: 60
+LiquidityDelta: 10000000000000000000
+LiquidityInPool: 10000000000000000000
+Fee Tier: 2000
+
+
+Owner Address: 0x7fa9385be102ac3eac297483dd6233d62b3e1496
+TickLower: 60
+TickUpper: 120
+LiquidityDelta: 10000000000000000000
+LiquidityInPool: 10000000000000000000
+Fee Tier: 2000
+
+
