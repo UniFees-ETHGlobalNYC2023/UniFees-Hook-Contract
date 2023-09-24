@@ -35,7 +35,7 @@ contract DynamicFeeHookTest is Test, GasSnapshot {
 
     DynamicFeeHook hook = DynamicFeeHook(
             address(
-                uint160(Hooks.AFTER_MODIFY_POSITION_FLAG | Hooks.BEFORE_SWAP_FLAG)
+                uint160(Hooks.AFTER_MODIFY_POSITION_FLAG | Hooks.BEFORE_SWAP_FLAG | Hooks.AFTER_SWAP_FLAG)
             )
         );
     
@@ -54,15 +54,17 @@ contract DynamicFeeHookTest is Test, GasSnapshot {
     uint160 constant SQRT_RATIO_1_1 = 79228162514264337593543950336;
 
     function setUp() public {
-        vm.recordLogs();
         lp = makeAddr('lp');
         user = makeAddr('user');
         vm.deal(lp, 100_000 ether);
+        
         _deployERC20Tokens();
         poolManager = new PoolManager(500_000);
+        // hook = new DynamicFeeHook(poolManager);
         _stubValidateHookAddress();
         _initializePool();
         _addLiquidityToPool();
+        console2.log(address(modifyPositionRouter));
     }
 
     function test_Swap() public {
@@ -73,16 +75,6 @@ contract DynamicFeeHookTest is Test, GasSnapshot {
             sqrtPriceLimitX96: TickMath.MAX_SQRT_RATIO - 1
         });
         PoolSwapTest.TestSettings memory testSettings = PoolSwapTest.TestSettings({withdrawTokens: true, settleUsingTransfer: true});
-        
-        vm.startPrank(lp, lp);
-        // (uint256 A, uint256 B, uint256 C) = hook.claim();
-        
-        int256 A = hook.claim();
-        assertEq(hook.alice(), hook.bob());
-        vm.stopPrank();
-        // assertEq(A, 1);
-        // assertEq(B, 1);
-        console2.log(A);
 
         token1.mint(user, 100 ether);
         token0.mint(user, 100 ether);
@@ -94,7 +86,7 @@ contract DynamicFeeHookTest is Test, GasSnapshot {
 
         console2.log(token1.balanceOf(user));
         console2.log(token0.balanceOf(user));
-
+        console2.log(address(hook).balance);
     }
 
     function _addLiquidityToPool() private {
@@ -137,10 +129,31 @@ contract DynamicFeeHookTest is Test, GasSnapshot {
             poolKey,
             params2
         );
+
         vm.writeLine(path, string.concat("Owner Address: ", Strings.toHexString(uint256(uint160(address(this))), 20)));
         vm.writeLine(path, string.concat("TickLower: ", Strings.toStringSigned(int256(params2.tickLower))));
         vm.writeLine(path, string.concat("TickUpper: ", Strings.toStringSigned(int256(params2.tickUpper))));
         vm.writeLine(path, string.concat("LiquidityDelta: ", Strings.toStringSigned(int256(params2.liquidityDelta))));
+        vm.writeLine(path, string.concat("LiquidityInPool: ", Strings.toString(uint256(poolManager.getLiquidity(poolKey.toId())))));
+        vm.writeLine(path, string.concat("Fee Tier: ", Strings.toString(hook.getFeeTier(lp))));
+        vm.writeLine(path, "\n");
+
+        // Approve the tokens for swapping through the swapRouter
+        token0.approve(address(swapRouter), 100 ether);
+        token1.approve(address(swapRouter), 100 ether);
+
+        IPoolManager.ModifyPositionParams memory params3 = IPoolManager.ModifyPositionParams(-120, 120, 50 ether);
+        hook.feeTier(2000);
+        // Add liquidity from 60 to +120
+        modifyPositionRouter.modifyPosition(
+            poolKey,
+            params2
+        );
+
+        vm.writeLine(path, string.concat("Owner Address: ", Strings.toHexString(uint256(uint160(address(this))), 20)));
+        vm.writeLine(path, string.concat("TickLower: ", Strings.toStringSigned(int256(params3.tickLower))));
+        vm.writeLine(path, string.concat("TickUpper: ", Strings.toStringSigned(int256(params3.tickUpper))));
+        vm.writeLine(path, string.concat("LiquidityDelta: ", Strings.toStringSigned(int256(params3.liquidityDelta))));
         vm.writeLine(path, string.concat("LiquidityInPool: ", Strings.toString(uint256(poolManager.getLiquidity(poolKey.toId())))));
         vm.writeLine(path, string.concat("Fee Tier: ", Strings.toString(hook.getFeeTier(lp))));
         vm.writeLine(path, "\n");
@@ -176,7 +189,7 @@ contract DynamicFeeHookTest is Test, GasSnapshot {
         poolKey = PoolKey({
             currency0: Currency.wrap(address(token0)),
             currency1: Currency.wrap(address(token1)),
-            fee: FeeLibrary.DYNAMIC_FEE_FLAG,
+            fee: 0xC00000,//FeeLibrary.DYNAMIC_FEE_FLAG,
             tickSpacing: 60,
             hooks: IHooks(hook)
         });
